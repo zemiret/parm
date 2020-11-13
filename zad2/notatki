@@ -1,0 +1,14 @@
+Jazda równoległa do ściany, 50cm:
+
+* czujnik bliższy i dalszy, dają nam jak bardzo równoległe to jest
+* regulator PD (proporcjonalno różnicowy)
+* różnica między czujnikami to jest pochodna
+
+Generalnie:
+
+* wybieranie "minimów" z czujników przednich
+* wszystko odpowiednio dobranymi stałymi (proporcje) - można tak poradzić (bez ifów)
+* ZDECYDOWANIE trzeba skorzystać z 2 bocznych czujników i kilku przednich
+
+WYMAGANA WYDAJNOŚĆ: 45%
+docs: https://www.cyberbotics.com/doc/guide/pioneer-3dx?version=cyberbotics:R2019a
