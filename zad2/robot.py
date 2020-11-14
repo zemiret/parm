@@ -1,6 +1,7 @@
 """Sample Webots controller for the wall following benchmark."""
 
 from controller import Robot
+import math
 
 def getDistance(sensor):
     """
@@ -16,6 +17,9 @@ def getDistance(sensor):
 def is_read_valid(dist):
     return dist < 5.0
 
+cos40 = math.cos(math.pi / 9 * 2)
+cos60 = math.cos(math.pi / 3)
+cos80 = math.cos(math.pi / 9 * 4)
 
 # Maximum speed for the velocity value of the wheels.
 # Don't change this value.
@@ -90,13 +94,26 @@ prev_skew = 0
 parallel_skew = 0.0
 skews = [0 for _ in range(16)]
 
-FRONT_VALID_READ = 0.7
+FRONT_VALID_READ = 0.6
 WALL_DIST = 0.5
 
 left_vel = MAX_SPEED
 right_vel = MAX_SPEED
 
 invalidated = False
+
+so15_dist = 0
+so0_dist = 0
+
+so1_dist = 0
+so2_dist = 0
+so3_dist = 0
+so4_dist = 0
+so5_dist = 0
+
+so12_dist = 0
+so13_dist = 0
+so14_dist = 0
 
 def pd_steer(left_vel, right_vel, cur_skew, prev_skew, tau_p, tau_d):
     diff = (cur_skew - prev_skew) / timestep 
@@ -113,9 +130,39 @@ def clear_other_skews(arr, idx):
         if i != idx:
             arr[i] = 0
 
+def front_dist():
+    if so0_dist < FRONT_VALID_READ:
+        return so0_dist
+    elif so3_dist < FRONT_VALID_READ:
+        return so3_dist * cos80
+    elif so2_dist < FRONT_VALID_READ:
+        return so2_dist * cos60
+    elif so1_dist < FRONT_VALID_READ:
+        return so1_dist * cos40
+    else:
+        print("TOTALY INVALID FRONT")
+        return 0.5
 
-tau_p = 0.002
-tau_d = 0.2
+def rear_dist():
+    if so15_dist < FRONT_VALID_READ:
+        return so15_dist
+    elif so14_dist < FRONT_VALID_READ:
+        return so14_dist * cos40
+    elif so13_dist < FRONT_VALID_READ:
+        return so13_dist * cos60
+    elif so0_dist < FRONT_VALID_READ:
+        return so0_dist 
+    elif so1_dist < FRONT_VALID_READ:
+        return so1_dist * cos40
+    elif so2_dist < FRONT_VALID_READ:
+        return so2_dist * cos60
+    else:
+        print("TOTALY INVALID REAR")
+        return 0.5
+
+
+tau_p = 0.8
+tau_d = 0.4
 while robot.step(timestep) != -1:
     so15_dist = getDistance(so15)
     so0_dist = getDistance(so0)
@@ -143,48 +190,66 @@ while robot.step(timestep) != -1:
         skews[4] = cur_skew
         clear_other_skews(skews, 4)
 
-    if so3_dist < FRONT_VALID_READ:
+    elif so3_dist < FRONT_VALID_READ:
         print('so3', so3_dist)
         cur_skew = WALL_DIST - so3_dist
         left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, skews[3], 5.0, 5.0)
         skews[3] = cur_skew
         clear_other_skews(skews, 3)
 
-    elif so2_dist < FRONT_VALID_READ :
-        print('so2', so2_dist)
-        cur_skew = WALL_DIST - so2_dist
-        left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, skews[2], 3.0, 3.0)
-        skews[2] = cur_skew
-        clear_other_skews(skews, 2)
+#    elif so2_dist < FRONT_VALID_READ :
+#        print('so2', so2_dist)
+#        cur_skew = WALL_DIST - so2_dist
+#        left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, skews[2], 3.0, 3.0)
+#        skews[2] = cur_skew
+#        clear_other_skews(skews, 2)
     else:
-        if so0_dist < FRONT_VALID_READ  and so15_dist < FRONT_VALID_READ :
-            dist_skew = 0.5 - min(so0_dist, so15_dist)
-            angle_skew = so15_dist - so0_dist
-            steer = tau_p * dist_skew + tau_d * angle_skew
-            left_vel = max(min(MAX_SPEED, left_vel + steer), -MAX_SPEED)
-            right_vel = max(min(MAX_SPEED, right_vel - steer), -MAX_SPEED)
-            clear_other_skews(skews, -1)
+        if so0_dist < FRONT_VALID_READ or so1_dist < FRONT_VALID_READ\
+                or so2_dist < FRONT_VALID_READ\
+                or so3_dist < FRONT_VALID_READ\
+                or so4_dist < FRONT_VALID_READ:
 
-        elif so0_dist < FRONT_VALID_READ :
-            cur_skew = WALL_DIST - so0_dist
-            left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, skews[0], 0.004, 5.0)
-            skews[0] = cur_skew
-            clear_other_skews(skews, 0)
+            front = front_dist()
+            rear = rear_dist()
 
-        elif so15_dist < FRONT_VALID_READ :
-            cur_skew = WALL_DIST - so15_dist
-            left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, skews[15], 0.004, 5.0)
-            skews[15] = cur_skew
-            clear_other_skews(skews, 15)
-        elif so1_dist < FRONT_VALID_READ :
-            print('so1', so1_dist)
-            cur_skew = WALL_DIST - so1_dist
-            left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, skews[1], 0.5, 0.5)
-            skews[1] = cur_skew
-            clear_other_skews(skews, 1)
+            dist_skew = 0.5 - min(front, rear)
+            angle_skew = rear - front
+
+            if dist_skew > 0 and angle_skew > 0 or dist_skew < 0 and angle_skew < 0:
+                steer = tau_p * dist_skew + tau_d * angle_skew
+                left_vel = max(min(MAX_SPEED, left_vel + steer), -MAX_SPEED)
+                right_vel = max(min(MAX_SPEED, right_vel - steer), -MAX_SPEED)
+                clear_other_skews(skews, -1)
+
+
+#        if so0_dist < FRONT_VALID_READ  and so15_dist < FRONT_VALID_READ :
+#            dist_skew = 0.5 - min(so0_dist, so15_dist)
+#            angle_skew = so15_dist - so0_dist
+#            steer = tau_p * dist_skew + tau_d * angle_skew
+#            left_vel = max(min(MAX_SPEED, left_vel + steer), -MAX_SPEED)
+#            right_vel = max(min(MAX_SPEED, right_vel - steer), -MAX_SPEED)
+#            clear_other_skews(skews, -1)
+#
+#        elif so0_dist < FRONT_VALID_READ :
+#            cur_skew = WALL_DIST - so0_dist
+#            left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, skews[0], 0.004, 5.0)
+#            skews[0] = cur_skew
+#            clear_other_skews(skews, 0)
+#
+#        elif so15_dist < FRONT_VALID_READ :
+#            cur_skew = WALL_DIST - so15_dist
+#            left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, skews[15], 0.004, 5.0)
+#            skews[15] = cur_skew
+#            clear_other_skews(skews, 15)
+#        elif so1_dist < FRONT_VALID_READ :
+#            print('so1', so1_dist)
+#            cur_skew = WALL_DIST - so1_dist
+#            left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, skews[1], 0.5, 0.5)
+#            skews[1] = cur_skew
+#            clear_other_skews(skews, 1)
         else:
             # No front read at all (in range). Probably turn left
-            left_vel = MAX_SPEED * 0.4
+            left_vel = MAX_SPEED * 0.51
             right_vel = MAX_SPEED
             invalidated = True
 
