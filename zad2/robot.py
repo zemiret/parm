@@ -94,7 +94,7 @@ prev_skew = 0
 parallel_skew = 0.0
 skews = [0 for _ in range(16)]
 
-FRONT_VALID_READ = 0.6
+FRONT_VALID_READ = 0.55
 WALL_DIST = 0.5
 
 left_vel = MAX_SPEED
@@ -161,7 +161,7 @@ def rear_dist():
         return 0.5
 
 
-tau_p = 0.8
+tau_p = 0.4
 tau_d = 0.4
 while robot.step(timestep) != -1:
     so15_dist = getDistance(so15)
@@ -186,14 +186,14 @@ while robot.step(timestep) != -1:
     if so4_dist < FRONT_VALID_READ:
         print('so4', so3_dist)
         cur_skew = WALL_DIST - so4_dist
-        left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, skews[4], 5.0, 5.0)
+        left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, skews[4], 2.0, 3.0)
         skews[4] = cur_skew
         clear_other_skews(skews, 4)
 
     elif so3_dist < FRONT_VALID_READ:
         print('so3', so3_dist)
         cur_skew = WALL_DIST - so3_dist
-        left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, skews[3], 5.0, 5.0)
+        left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, skews[3], 2.0, 3.0)
         skews[3] = cur_skew
         clear_other_skews(skews, 3)
 
@@ -212,10 +212,11 @@ while robot.step(timestep) != -1:
             front = front_dist()
             rear = rear_dist()
 
-            dist_skew = 0.5 - min(front, rear)
+#            dist_skew = 0.5 - min(front, rear)
+            dist_skew = 0.5 - (front + rear) / 2
             angle_skew = rear - front
 
-            if dist_skew > 0 and angle_skew > 0 or dist_skew < 0 and angle_skew < 0:
+            if dist_skew > 0 and angle_skew >= -0.1 or dist_skew < 0 and angle_skew <= 0.1:
                 steer = tau_p * dist_skew + tau_d * angle_skew
                 left_vel = max(min(MAX_SPEED, left_vel + steer), -MAX_SPEED)
                 right_vel = max(min(MAX_SPEED, right_vel - steer), -MAX_SPEED)
@@ -249,7 +250,7 @@ while robot.step(timestep) != -1:
 #            clear_other_skews(skews, 1)
         else:
             # No front read at all (in range). Probably turn left
-            left_vel = MAX_SPEED * 0.51
+            left_vel = MAX_SPEED * 0.55
             right_vel = MAX_SPEED
             invalidated = True
 
