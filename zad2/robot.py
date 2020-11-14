@@ -86,16 +86,10 @@ integral = 0.0
 prev_skew = 0
 # prev_skew_dist_so0 = 0
 # prev_skew_dist_so15 = 0
-# tau_p = 30.0
-# tau_d = 15.0
-# tau_i = 0.0
 
 parallel_skew = 0.0
-so0_skew = 0.0
-so1_skew = 0.0
-so2_skew = 0.0
-so3_skew = 0.0
-so4_skew = 0.0
+skews = [0 for _ in range(16)]
+
 FRONT_VALID_READ = 0.7
 WALL_DIST = 0.5
 
@@ -114,6 +108,14 @@ def pd_steer(left_vel, right_vel, cur_skew, prev_skew, tau_p, tau_d):
     return left_vel, right_vel
 
 
+def clear_other_skews(arr, idx):
+    for i in range(len(arr)):
+        if i != idx:
+            arr[i] = 0
+
+
+tau_p = 0.002
+tau_d = 0.2
 while robot.step(timestep) != -1:
     so15_dist = getDistance(so15)
     so0_dist = getDistance(so0)
@@ -132,77 +134,59 @@ while robot.step(timestep) != -1:
         left_vel = MAX_SPEED
         right_vel = MAX_SPEED
         invalidated = False
+        clear_other_skews(skews, -1)
 
-#    if so3_dist < 0.51 or so4_dist < 0.51:
-#        # practically front to the wall
-#        ## print('so3 valid')
-#        print('Front to the wall: ', so3_dist, so4_dist)
-#        invalidated = True
-#
-#        leftWheel.setVelocity(MAX_SPEED)
-#        rightWheel.setVelocity(-MAX_SPEED)
-#
-#        while so3_dist < 2 or so4_dist < 2:
-#            so3_dist = getDistance(so3)
-#            so4_dist = getDistance(so4)
-#            print('stepping here: ', so3_dist, so4_dist)
-#            robot.step(timestep)
+    if so4_dist < FRONT_VALID_READ:
+        print('so4', so3_dist)
+        cur_skew = WALL_DIST - so4_dist
+        left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, skews[4], 5.0, 5.0)
+        skews[4] = cur_skew
+        clear_other_skews(skews, 4)
 
-    cur_par_skew = so15_dist - so0_dist
-    if is_read_valid(so0_dist) and is_read_valid(so15_dist)\
-            and (0.4 < so0_dist < 0.8 or 0.4 < so15_dist < 0.8)\
-            and -0.03 < cur_par_skew < 0.03:
-        # keep current path
-#        cur_skew = so15_dist - so0_dist # > 0 => going towards wall
-        left_vel, right_vel = pd_steer(left_vel, right_vel, cur_par_skew, parallel_skew, 0.3, 6.0)
-        parallel_skew = cur_par_skew
+    if so3_dist < FRONT_VALID_READ:
+        print('so3', so3_dist)
+        cur_skew = WALL_DIST - so3_dist
+        left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, skews[3], 5.0, 5.0)
+        skews[3] = cur_skew
+        clear_other_skews(skews, 3)
 
-        so0_skew = 0
-        so3_skew = 0
-        so2_skew = 0
+    elif so2_dist < FRONT_VALID_READ :
+        print('so2', so2_dist)
+        cur_skew = WALL_DIST - so2_dist
+        left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, skews[2], 3.0, 3.0)
+        skews[2] = cur_skew
+        clear_other_skews(skews, 2)
     else:
-#        if so4_dist < FRONT_VALID_READ:
-#            print('so4', so4_dist)
-#            cur_skew = WALL_DIST - so4_dist
-#            left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, so4_skew, 10.0, 5.0)
-#            so4_skew = cur_skew
-        if so3_dist < FRONT_VALID_READ * 1.2:
-            print('so3', so3_dist)
-            cur_skew = WALL_DIST - so3_dist
-            left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, so3_skew, 5.0, 5.0)
-            so3_skew = cur_skew
+        if so0_dist < FRONT_VALID_READ  and so15_dist < FRONT_VALID_READ :
+            dist_skew = 0.5 - min(so0_dist, so15_dist)
+            angle_skew = so15_dist - so0_dist
+            steer = tau_p * dist_skew + tau_d * angle_skew
+            left_vel = max(min(MAX_SPEED, left_vel + steer), -MAX_SPEED)
+            right_vel = max(min(MAX_SPEED, right_vel - steer), -MAX_SPEED)
+            clear_other_skews(skews, -1)
 
-            parallel_skew = 0
-            so0_skew = 0
-        if so2_dist < FRONT_VALID_READ * 1.2:
-            print('so2', so2_dist)
-            cur_skew = WALL_DIST - so2_dist
-            left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, so2_skew, 3.0, 3.0)
-            so2_skew = cur_skew
+        elif so0_dist < FRONT_VALID_READ :
+            cur_skew = WALL_DIST - so0_dist
+            left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, skews[0], 0.004, 5.0)
+            skews[0] = cur_skew
+            clear_other_skews(skews, 0)
 
-            parallel_skew = 0
-            so3_skew = 0
-            so0_skew = 0
-        elif so1_dist < FRONT_VALID_READ:
+        elif so15_dist < FRONT_VALID_READ :
+            cur_skew = WALL_DIST - so15_dist
+            left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, skews[15], 0.004, 5.0)
+            skews[15] = cur_skew
+            clear_other_skews(skews, 15)
+        elif so1_dist < FRONT_VALID_READ :
             print('so1', so1_dist)
             cur_skew = WALL_DIST - so1_dist
-            left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, so1_skew, 1.0, 0.5)
-            so1_skew = cur_skew
-
-            
-        elif so0_dist < FRONT_VALID_READ:
-            print('so0', so0_dist)
-            cur_skew = WALL_DIST - so0_dist
-            left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, so0_skew, 0.01, 5.0)
-            so0_skew = cur_skew
-
-            parallel_skew = 0
-            so3_skew = 0
-            so2_skew = 0
+            left_vel, right_vel = pd_steer(left_vel, right_vel, cur_skew, skews[1], 0.5, 0.5)
+            skews[1] = cur_skew
+            clear_other_skews(skews, 1)
         else:
             # No front read at all (in range). Probably turn left
-            left_vel = MAX_SPEED * 0.5675
+            left_vel = MAX_SPEED * 0.4
             right_vel = MAX_SPEED
+            invalidated = True
 
     print('LEFT, RIGHT: ', left_vel, right_vel)
 
