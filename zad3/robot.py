@@ -50,48 +50,91 @@ camera.recognitionEnable(50)
 LANE_LEFT = 0
 LANE_MID = 1
 LANE_RIGHT = 2
+LANE_WIDTH = 3.0
+
+step = 0
+def debug(msg):
+    if step % 50 == 0:
+        print(msg + '\n\n')
 
 class ReactiveController:
-    def __init__(self, driver, gps, sensor_manager):
+    def __init__(self, driver, gps, sensors):
         self.driver = driver
         self.gps = gps
 #        self.target_lane = LANE_RIGHT
-        self.sensor_manager = sensor_manager
+        self.sensors = sensors
 
         self.target_lane = LANE_RIGHT
         self.target_lane_pos = -1.0
 
         self.x = self.get_x()
 
-        self.angle_p = 0.03
+        self.angle_p = 0.02
         self.angle_d = 2.0
+
+        self.target_left_dist = self.sensors.max_left * 0.15
+        self.left_dist = 0
+        self.left_angle_p = -0.0004
+        self.left_angle_d = -1.5
+
+        self.downcounter = 0
 
     def change_lane_left(self):
         if self.target_lane > LANE_LEFT:
             self.target_lane -= 1
-            self.target_lane_pos = (self.get_x() + 3.0)
+            self.target_lane_pos = (self.target_lane_pos + LANE_WIDTH)
+            print('Turn left, target: ', self.target_lane_pos)
+
+            self.downcounter = 250
 
     def change_lane_right(self):
         if self.target_lane < LANE_RIGHT:
             self.target_lane += 1
-            self.target_lane_pos = (self.get_x() - 3.0)
+            self.target_lane_pos = (self.get_x() - LANE_WIDTH)
+            print('Turn right, target: ', self.target_lane_pos)
+
+            self.downcounter = 250
 
     def update_angle(self):
-        cur_x = self.get_x()
-        p_dif = cur_x - self.target_lane_pos
-        d_dif = cur_x - self.x 
+        # TODO: LANE_LEFT PD adjusting target_lane_pos (that should do!)
 
-        steer = self.angle_p * p_dif + self.angle_d * d_dif
-        cur_steer_angle = self.driver.getSteeringAngle()
+        if self.downcounter == 0 and self.target_lane == LANE_LEFT:
+            left_dist = self.get_left_dist()
+            p_dif = left_dist - self.target_left_dist
+            d_dif = left_dist - self.left_dist
 
-        new_angle = max(min(steer + cur_steer_angle, 0.2), -0.2)
+            steer = self.left_angle_p * p_dif + self.left_angle_d * d_dif
+            cur_steer_angle = self.driver.getSteeringAngle()
 
-        self.driver.setSteeringAngle(steer + cur_steer_angle)
-        self.x = cur_x # prev = cur
+#            if self.sensors.front_left_read():
+#                cur_steer_angle = -cur_steer_angle
+
+            new_angle = max(min(steer + cur_steer_angle, 0.12), -0.12)
+#            debug('STEER: ' + str(steer) + ' NEW ANGLE: ' + str(new_angle))
+            self.driver.setSteeringAngle(new_angle)
+
+#            print(steer, new_angle)
+#            time.sleep(0.2)
+
+            self.left_dist = left_dist # prev = cur
+        else:
+            cur_x = self.get_x()
+            p_dif = cur_x - self.target_lane_pos
+            d_dif = cur_x - self.x 
+
+            steer = self.angle_p * p_dif + self.angle_d * d_dif
+            cur_steer_angle = self.driver.getSteeringAngle()
+
+            new_angle = max(min(steer + cur_steer_angle, 0.1), -0.1)
+
+            self.driver.setSteeringAngle(new_angle)
+            self.x = cur_x # prev = cur
+
+        self.downcounter = max(0, self.downcounter - 1)
 
     def update_speed(self):
-        frontDistance = self.sensor_manager.front.getValue()
-        frontRange = self.sensor_manager.front.getMaxValue()
+        frontDistance = self.sensors.front.getValue()
+        frontRange = self.sensors.front.getMaxValue()
 
         speed = min(maxSpeed, maxSpeed * frontDistance / (frontRange * 0.8))
         self.driver.setCruisingSpeed(speed)
@@ -108,6 +151,9 @@ class ReactiveController:
 
     def get_x(self):
         return self.gps.getValues()[0]
+
+    def get_left_dist(self):
+        return self.sensors.left.getValue()
 
 
 class SensorManager:
@@ -157,6 +203,12 @@ class SensorManager:
                 and self.front_right_1.getValue() > (self.max_front_right_1 * 0.8) \
                 and self.front_right_2.getValue() > (self.max_front_right_2 * 0.8) \
 
+    def front_left_read(self):
+        return self.front.getValue() < self.max_front \
+                or self.front_left_0.getValue() < self.max_front_left_0 \
+                or self.front_left_1.getValue() < self.max_front_left_1 \
+                or self.front_left_2.getValue() < self.max_front_left_2
+
 
 class DecisiveController:
     def __init__(self, reactive_controller, sensor_manager):
@@ -169,22 +221,27 @@ class DecisiveController:
 
     def act(self):
         if self.sensors.front_clear():
-            self.clear_count = 0
+#            debug('Front clear, target_lane: ' + str(self.controller.target_lane))
             self.turning = False
-            return
+            if self.controller.target_lane == LANE_LEFT:
+                self.clear_count = 0
+                return
+
 
         if not self.turning and self.sensors.can_turn_left():
             self.clear_count += 1
 
             if self.clear_count > self.clear_threshold:
                 self.turning = True 
+                self.clear_count = 0
                 self.controller.change_lane_left()
 
-        elif not self.turning and self.sensors.can_turn_right():
+        elif not self.sensors.front_clear() and self.turning == 0 and self.sensors.can_turn_right():
             self.clear_count += 1
 
             if self.clear_count > self.clear_threshold:
                 self.turning = True 
+                self.clear_count = 0
                 self.controller.change_lane_right()
         else:
             self.clear_count = 0
@@ -208,6 +265,8 @@ while driver.step() != -1:
     reactive_controller.update_angle()
     reactive_controller.update_speed()
     decisive_controller.act()
+
+    step += 1
 
 #    time.sleep(0.01)
 
