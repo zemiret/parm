@@ -24,7 +24,7 @@ sensorsNames = [
     'left']
 sensors = {}
 
-maxSpeed = 80
+maxSpeed = 100
 driver = Driver()
 
 driver.setSteeringAngle(0.0)  # go straight
@@ -52,6 +52,8 @@ LANE_MID = 1
 LANE_RIGHT = 2
 LANE_WIDTH = 3.0
 
+DOWNCOUNTER = 140
+
 step = 0
 def debug(msg):
     if step % 50 == 0:
@@ -69,12 +71,12 @@ class ReactiveController:
 
         self.x = self.get_x()
 
-        self.angle_p = 0.02
-        self.angle_d = 2.0
+        self.angle_p = 0.04
+        self.angle_d = 3.5
 
         self.target_left_dist = self.sensors.max_left * 0.15
         self.left_dist = 0
-        self.left_angle_p = -0.0004
+        self.left_angle_p = -0.004
         self.left_angle_d = -1.5
 
         self.downcounter = 0
@@ -85,7 +87,7 @@ class ReactiveController:
             self.target_lane_pos = (self.target_lane_pos + LANE_WIDTH)
             print('Turn left, target: ', self.target_lane_pos)
 
-            self.downcounter = 250
+            self.downcounter = DOWNCOUNTER
 
     def change_lane_right(self):
         if self.target_lane < LANE_RIGHT:
@@ -93,7 +95,7 @@ class ReactiveController:
             self.target_lane_pos = (self.get_x() - LANE_WIDTH)
             print('Turn right, target: ', self.target_lane_pos)
 
-            self.downcounter = 250
+            self.downcounter = DOWNCOUNTER
 
     def update_angle(self):
         # TODO: LANE_LEFT PD adjusting target_lane_pos (that should do!)
@@ -125,7 +127,7 @@ class ReactiveController:
             steer = self.angle_p * p_dif + self.angle_d * d_dif
             cur_steer_angle = self.driver.getSteeringAngle()
 
-            new_angle = max(min(steer + cur_steer_angle, 0.1), -0.1)
+            new_angle = max(min(steer + cur_steer_angle, 0.12), -0.12)
 
             self.driver.setSteeringAngle(new_angle)
             self.x = cur_x # prev = cur
@@ -187,7 +189,7 @@ class SensorManager:
 
 
     def front_clear(self):
-        return self.front.getValue() > (self.max_front * 0.6)
+        return self.front.getValue() > (self.max_front * 0.7)
 
     def can_turn_left(self):
         return self.left.getValue() > (self.max_left / 2) \
@@ -217,7 +219,7 @@ class DecisiveController:
         self.turning = False
 
         self.clear_count = 0
-        self.clear_threshold = 10
+        self.clear_threshold = 6
 
     def act(self):
         if self.sensors.front_clear():
