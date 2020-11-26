@@ -1,5 +1,10 @@
 """Sample Webots controller for highway driving benchmark."""
 
+# TODO: IEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAS
+# Try to always keep the left lane. I.E. Some exact distance from the left railing
+# If needed, adjust speed, overtake to the right, etc, but always try to navigte back 
+# to the left railing
+
 from vehicle import Driver
 import time
 
@@ -41,7 +46,7 @@ camera = driver.getCamera('camera')
 camera.enable(50)
 camera.recognitionEnable(50)
 
-LANE_POSITIONS = [5.0, 2.0, -1.0]
+# LANE_POSITIONS = [5.0, 2.0, -1.0]
 LANE_LEFT = 0
 LANE_MID = 1
 LANE_RIGHT = 2
@@ -50,9 +55,11 @@ class ReactiveController:
     def __init__(self, driver, gps, sensor_manager):
         self.driver = driver
         self.gps = gps
-        self.target_lane = LANE_RIGHT
-        self.lane_positions = LANE_POSITIONS
+#        self.target_lane = LANE_RIGHT
         self.sensor_manager = sensor_manager
+
+        self.target_lane = LANE_RIGHT
+        self.target_lane_pos = -1.0
 
         self.x = self.get_x()
 
@@ -60,14 +67,18 @@ class ReactiveController:
         self.angle_d = 2.0
 
     def change_lane_left(self):
-        self.target_lane = max(self.target_lane - 1, 0)
+        if self.target_lane > LANE_LEFT:
+            self.target_lane -= 1
+            self.target_lane_pos = (self.get_x() + 3.0)
 
     def change_lane_right(self):
-        self.target_lane = min(self.target_lane + 1, len(LANE_POSITIONS) - 1)
+        if self.target_lane < LANE_RIGHT:
+            self.target_lane += 1
+            self.target_lane_pos = (self.get_x() - 3.0)
 
     def update_angle(self):
         cur_x = self.get_x()
-        p_dif = cur_x - self.lane_positions[self.target_lane]
+        p_dif = cur_x - self.target_lane_pos
         d_dif = cur_x - self.x 
 
         steer = self.angle_p * p_dif + self.angle_d * d_dif
@@ -82,10 +93,10 @@ class ReactiveController:
         frontDistance = self.sensor_manager.front.getValue()
         frontRange = self.sensor_manager.front.getMaxValue()
 
-        speed = min(maxSpeed, maxSpeed * frontDistance / (frontRange * 0.5))
+        speed = min(maxSpeed, maxSpeed * frontDistance / (frontRange * 0.8))
         self.driver.setCruisingSpeed(speed)
 
-        if frontDistance < frontRange * 0.15: # very close. Full break, hope for no collision
+        if frontDistance < frontRange * 0.2: # very close. Full break, hope for no collision
             self.driver.setBrakeIntensity(1)
 
         # brake if we need to reduce the speed
@@ -94,9 +105,6 @@ class ReactiveController:
             self.driver.setBrakeIntensity(min(speedDiff / speed, 1))
         else:
             self.driver.setBrakeIntensity(0)
-
-    def get_lane(self):
-        return self.target_lane
 
     def get_x(self):
         return self.gps.getValues()[0]
@@ -133,7 +141,7 @@ class SensorManager:
 
 
     def front_clear(self):
-        return self.front.getValue() > (self.max_front / 2)
+        return self.front.getValue() > (self.max_front * 0.6)
 
     def can_turn_left(self):
         return self.left.getValue() > (self.max_left / 2) \
@@ -190,7 +198,7 @@ decisive_controller = DecisiveController(reactive_controller, sensor_manager)
 speed = maxSpeed
 driver.setCruisingSpeed(speed)
 
-for _ in range(300):
+for _ in range(250):
     driver.step()
 
 
