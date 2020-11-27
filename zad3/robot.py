@@ -64,8 +64,8 @@ class ReactiveController:
 
         self.target_left_dist = self.sensors.max_left * 0.15
         self.left_dist = 0
-        self.left_angle_p = -0.004
-        self.left_angle_d = -1.5
+        self.left_angle_p = -0.008
+        self.left_angle_d = -2.5
 
         self.downcounter = 0
 
@@ -115,7 +115,7 @@ class ReactiveController:
         frontDistance = self.sensors.front.getValue()
         frontRange = self.sensors.front.getMaxValue()
 
-        speed = min(maxSpeed, maxSpeed * frontDistance / (frontRange * 0.8))
+        speed = min(maxSpeed, maxSpeed * frontDistance / (frontRange * 0.9))
         self.driver.setCruisingSpeed(speed)
 
         if frontDistance < frontRange * 0.2: # very close. Full break, hope for no collision
@@ -160,7 +160,7 @@ class SensorManager:
 
 
     def front_clear(self):
-        return self.front.getValue() > (self.max_front * 0.7)
+        return self.front.getValue() > (self.max_front * 0.75)
 
     def can_turn_left(self):
         return self.left.getValue() > (self.max_left / 2) \
