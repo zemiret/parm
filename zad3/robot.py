@@ -39,7 +39,7 @@ gps.enable(timestep)
 LANE_LEFT = 0
 LANE_MID = 1
 LANE_RIGHT = 2
-LANE_WIDTH = 3.0
+LANE_WIDTH = 3.5
 
 DOWNCOUNTER = 140
 
@@ -62,10 +62,10 @@ class ReactiveController:
         self.angle_p = 0.04
         self.angle_d = 3.5
 
-        self.target_left_dist = self.sensors.max_left * 0.15
+        self.target_left_dist = self.sensors.max_left * 0.18
         self.left_dist = 0
         self.left_angle_p = -0.008
-        self.left_angle_d = -2.5
+        self.left_angle_d = -4.0
 
         self.downcounter = 0
 
@@ -118,8 +118,9 @@ class ReactiveController:
         speed = min(maxSpeed, maxSpeed * frontDistance / (frontRange * 0.9))
         self.driver.setCruisingSpeed(speed)
 
-        if frontDistance < frontRange * 0.2: # very close. Full break, hope for no collision
+        if frontDistance < frontRange * 0.3: # very close. Full break, hope for no collision
             self.driver.setBrakeIntensity(1)
+            return
 
         # brake if we need to reduce the speed
         speedDiff = self.driver.getCurrentSpeed() - speed
